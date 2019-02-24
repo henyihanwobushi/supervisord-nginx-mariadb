@@ -81,6 +81,7 @@ fi
 		fi
 
 		echo
+		chmod +x /docker-entrypoint-initdb.d/*.sh
 		for f in /docker-entrypoint-initdb.d/*; do
 			case "$f" in
 				*.sh)  echo "$0: running $f"; . "$f" ;;

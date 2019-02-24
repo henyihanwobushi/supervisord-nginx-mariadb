@@ -1,44 +1,30 @@
 FROM centos:centos7
-MAINTAINER dayreiner
 
-ENV HOME=/root \
-    MARIADB_MAJOR=10.1 \
-    AUTHORIZED_KEYS=**None**
+ENV NGINX_RPM=http://nginx.org/packages/centos/7/noarch/RPMS/nginx-release-centos-7-0.el7.ngx.noarch.rpm
 
-# MariaDB Repo
-COPY config/MariaDB.repo /etc/yum.repos.d/MariaDB.repo
+COPY root /
 
 # Install required packages and MariaDB Vendor Repo
-RUN yum -y update && yum clean all && \
-    yum -y install openssh-server epel-release && \
-    yum clean all && \
-    yum -y install pwgen python-setuptools && \
-    yum -y install MariaDB-server MariaDB-client && yum clean all
+RUN PACKAGES="epel-release python-setuptools MariaDB-server MariaDB-client" && \
+    yum -y update && \
+    yum -y install $PACKAGES && \
+    yum clean all
 
-# Add scripts as a directory vs individual adds for optimization
-ADD scripts/ /
-# supervisord config
-COPY config/supervisord.conf /etc/supervisord.conf
+# install nginx
+RUN INSTALL_PKGS="nginx" && \
+    rpm -ivh ${NGINX_RPM} && \
+    yum install -y --setopt=tsflags=nodocs $INSTALL_PKGS && \
+    rpm -V $INSTALL_PKGS && \
+    yum clean all
 
-# Setup SSH, supervisord and SQL setup
-RUN echo "Setting up sshd..." && \
-    rm -f /etc/ssh/ssh_host_ecdsa_key /etc/ssh/ssh_host_rsa_key && \
-    ssh-keygen -q -N "" -t dsa -f /etc/ssh/ssh_host_ecdsa_key && \
-    ssh-keygen -q -N "" -t rsa -f /etc/ssh/ssh_host_rsa_key && \
-    sed -i "s/#UsePrivilegeSeparation.*/UsePrivilegeSeparation no/g" /etc/ssh/sshd_config && \
-    echo "Seting up supervisord..." && \
+# set up supervisor
+RUN easy_install supervisor && \
     chmod 666 /etc/supervisord.conf && \
-    easy_install supervisor && \
-    echo "Setting up MariDB database initialization scripts..." && \
-    mkdir /docker-entrypoint-initdb.d && \
-    chmod +x /*.sh && \
-    /ssh-setup.sh
-
-# MariaDB Config and DB Setup Scripts
-COPY config/server.cnf /etc/my.cnf.d/server.cnf
+    chmod +x /docker-entrypoint.sh
 
 # MariaDB volume and go
 VOLUME /var/lib/mysql
-EXPOSE 3306 22
+EXPOSE 3306 80
+
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["mysqld"]
